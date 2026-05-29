@@ -1,0 +1,18 @@
+# Dataset configuration for Nemotron-PII PII detection.
+dataset_name: "nvidia/Nemotron-PII"   # HF hub id (override if mirrored locally)
+text_column: "text"                    # raw text field
+spans_column: "privacy_mask"           # list of {label,start,end,value} spans
+
+# Reproducible splits (fractions must sum to 1.0).
+splits:
+  train: 0.8
+  validation: 0.1
+  test: 0.1
+seed: 42
+
+# Tokenizer used only for offset-based BIO alignment during preprocessing.
+base_tokenizer: "nvidia/Nemotron-Mini-4B-Instruct"
+max_length: 256
+
+# Where the processed Arrow dataset is written.
+output_dir: "dataset/processed_dataset"

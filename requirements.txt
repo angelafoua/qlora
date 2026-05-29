@@ -1,0 +1,19 @@
+# Core
+torch>=2.1
+transformers>=4.40
+peft>=0.10
+bitsandbytes>=0.43
+accelerate>=0.29
+datasets>=2.18
+
+# Tokenizer
+tokenizers>=0.15
+sentencepiece>=0.2
+
+# Metrics & utils
+seqeval>=1.2
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.8
+pyyaml>=6.0
+python-dotenv>=1.0

@@ -1,0 +1,13 @@
+# Benchmark configuration.
+base_model: "nvidia/Nemotron-Mini-4B-Instruct"
+qlora_dir: "qlora/fine_tuned_model"
+custom_tokenizer: "tokenizer/custom_tokenizer/tokenizer.json"
+
+text_dataset: "dataset/processed_dataset/raw_splits"
+text_column: "text"
+label_map: "dataset/processed_dataset/label_map.json"
+
+num_samples: 64    # examples drawn from the test split per configuration
+max_length: 256
+
+results_file: "benchmark/benchmark_results.json"

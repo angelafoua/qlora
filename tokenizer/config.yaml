@@ -1,0 +1,22 @@
+# Tokenizer training / evaluation configuration.
+base_tokenizer: "nvidia/Nemotron-Mini-4B-Instruct"  # baseline for comparison
+processed_dataset: "dataset/processed_dataset"       # source of training text
+text_dataset: "dataset/processed_dataset/raw_splits" # raw text splits
+text_column: "text"
+
+# Custom tokenizer training (HuggingFace BPE).
+vocab_size: 32000
+min_frequency: 2
+output_dir: "tokenizer/custom_tokenizer"
+
+# Domain tokens we never want split apart. These keep common enterprise PII
+# shapes (SSNs, EINs, phones, IDs) compact and stable across examples.
+special_tokens:
+  - "<SSN>"
+  - "<EIN>"
+  - "<PHONE>"
+  - "<ADDRESS>"
+  - "<EMAIL>"
+  - "<ID>"
+
+metrics_file: "tokenizer/tokenizer_metrics.json"
