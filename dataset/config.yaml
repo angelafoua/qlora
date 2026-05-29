@@ -1,9 +1,9 @@
 # Dataset configuration for Nemotron-PII PII detection.
 dataset_name: "nvidia/Nemotron-PII"   # HF hub id (override if mirrored locally)
 text_column: "text"                    # raw text field
-spans_column: "privacy_mask"           # PII spans; auto-detected if this name
-                                       # is absent (field variants like
-                                       # label/type & start/start_index handled)
+spans_column: "spans"                  # PII spans; auto-detected if this name
+                                       # is absent (offset-based detection +
+                                       # label-key inference handle variants)
 
 # Reproducible splits (fractions must sum to 1.0).
 splits:

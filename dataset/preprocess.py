@@ -19,9 +19,13 @@ IGNORE_INDEX = -100  # subword continuations / specials ignored by the loss
 # Different PII datasets name the same span fields differently (e.g. ai4privacy
 # uses ``privacy_mask`` with ``label/start/end``). Accept the common variants so
 # the pipeline works across Nemotron-PII and similar corpora.
-LABEL_KEYS = ("label", "type", "entity_type", "tag", "pii_type")
+LABEL_KEYS = ("label", "type", "entity_type", "tag", "pii_type", "entity",
+              "entity_class", "category", "class", "pii_class", "pii")
 START_KEYS = ("start", "start_index", "begin", "char_start", "start_offset")
 END_KEYS = ("end", "end_index", "stop", "char_end", "end_offset")
+# Keys we never treat as the label when inferring it from an unknown schema.
+NON_LABEL_KEYS = set(START_KEYS) | set(END_KEYS) | {"value", "text", "word",
+                                                    "score", "string", "span"}
 
 
 def _pick(d: dict, keys: tuple[str, ...], what: str):
@@ -34,13 +38,51 @@ def _pick(d: dict, keys: tuple[str, ...], what: str):
     )
 
 
+def _find_label(sp: dict):
+    """Return the label value, falling back to inferring it from the schema.
+
+    Datasets disagree on what to call the entity-type field. We first try the
+    known aliases, then infer it as the single remaining string-valued key that
+    isn't an offset/value/score field (e.g. ``privacy_mask`` style schemas).
+    """
+    for k in LABEL_KEYS:
+        if k in sp:
+            return sp[k]
+    candidates = [
+        k for k, v in sp.items()
+        if k not in NON_LABEL_KEYS and isinstance(v, str)
+    ]
+    if len(candidates) == 1:
+        return sp[candidates[0]]
+    raise KeyError(
+        f"Could not find a label field in span {sp!r}; expected one of "
+        f"{LABEL_KEYS} or a single string-valued key."
+    )
+
+
 def normalize_span(sp: dict) -> dict:
     """Coerce a raw span dict into a uniform {label, start, end} shape."""
     return {
-        "label": _pick(sp, LABEL_KEYS, "label"),
+        "label": _find_label(sp),
         "start": int(_pick(sp, START_KEYS, "start")),
         "end": int(_pick(sp, END_KEYS, "end")),
     }
+
+
+def _looks_like_span(value) -> bool:
+    """True if ``value`` is a non-empty list whose first item is a span dict.
+
+    A span dict is identified by carrying character offsets (start + end);
+    this is far more reliable than relying on the label field's name.
+    """
+    if not (isinstance(value, list) and value):
+        return False
+    first = value[0]
+    return (
+        isinstance(first, dict)
+        and any(k in first for k in START_KEYS)
+        and any(k in first for k in END_KEYS)
+    )
 
 
 def resolve_spans_column(ds, preferred: str) -> str:
@@ -56,15 +98,17 @@ def resolve_spans_column(ds, preferred: str) -> str:
     split = ds["train"] if "train" in ds else next(iter(ds.values()))
     for col in columns:
         for value in split[col]:
-            if isinstance(value, list) and value:
-                first = value[0]
-                if isinstance(first, dict) and any(k in first for k in LABEL_KEYS):
-                    print(
-                        f"Configured spans_column '{preferred}' not found; "
-                        f"auto-detected '{col}' instead."
-                    )
-                    return col
-                break  # column is a list but not of span dicts
+            if not isinstance(value, list):
+                break  # column isn't list-typed; skip it
+            if not value:
+                continue  # empty list on this row; check the next one
+            if _looks_like_span(value):
+                print(
+                    f"Configured spans_column '{preferred}' not found; "
+                    f"auto-detected '{col}' instead."
+                )
+                return col
+            break  # column is a list but not of span dicts
     raise ValueError(
         f"Configured spans_column '{preferred}' doesn't exist and no span-like "
         f"column could be detected. Available columns: {columns}. "
