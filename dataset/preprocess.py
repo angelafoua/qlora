@@ -6,6 +6,7 @@ character spans of the privacy mask, yielding standard B-/I-/O tags.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 from pathlib import Path
 
@@ -75,6 +76,10 @@ def _looks_like_span(value) -> bool:
     A span dict is identified by carrying character offsets (start + end);
     this is far more reliable than relying on the label field's name.
     """
+    try:
+        value = _coerce_spans(value)
+    except (TypeError, ValueError):
+        return False
     if not (isinstance(value, list) and value):
         return False
     first = value[0]
@@ -83,6 +88,33 @@ def _looks_like_span(value) -> bool:
         and any(k in first for k in START_KEYS)
         and any(k in first for k in END_KEYS)
     )
+
+
+def _coerce_spans(spans):
+    """Return a list of span dicts from a raw spans value.
+
+    Some PII corpora (incl. Nemotron-PII) store the spans column as a stringified
+    Python literal (single-quoted dicts) rather than a list or JSON. Parse those
+    with ``ast.literal_eval``, falling back to ``json.loads`` for true JSON.
+    """
+    if isinstance(spans, list):
+        return spans
+    if isinstance(spans, str):
+        text = spans.strip()
+        if not text:
+            return []
+        try:
+            return ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Spans value is a string but not valid Python/JSON: {spans!r}"
+                ) from exc
+    if spans is None:
+        return []
+    raise TypeError(f"Unsupported spans value of type {type(spans).__name__}: {spans!r}")
 
 
 def resolve_spans_column(ds, preferred: str) -> str:
@@ -98,9 +130,13 @@ def resolve_spans_column(ds, preferred: str) -> str:
     split = ds["train"] if "train" in ds else next(iter(ds.values()))
     for col in columns:
         for value in split[col]:
-            if not isinstance(value, list):
+            try:
+                coerced = _coerce_spans(value)
+            except (TypeError, ValueError):
+                break  # column isn't span-like; skip it
+            if not isinstance(coerced, list):
                 break  # column isn't list-typed; skip it
-            if not value:
+            if not coerced:
                 continue  # empty list on this row; check the next one
             if _looks_like_span(value):
                 print(
@@ -121,7 +157,7 @@ def build_label_list(ds, spans_column: str) -> list[str]:
     types: set[str] = set()
     for split in ds.values():
         for spans in split[spans_column]:
-            for sp in spans:
+            for sp in _coerce_spans(spans):
                 types.add(normalize_span(sp)["label"])
     labels = ["O"]
     for t in sorted(types):
@@ -131,7 +167,7 @@ def build_label_list(ds, spans_column: str) -> list[str]:
 
 def char_to_bio(spans: list[dict], offsets, label2id: dict) -> list[int]:
     """Assign a BIO id to each token given its (start, end) char offsets."""
-    spans = [normalize_span(sp) for sp in spans]
+    spans = [normalize_span(sp) for sp in _coerce_spans(spans)]
     labels = []
     for start, end in offsets:
         if start == end:  # special token
