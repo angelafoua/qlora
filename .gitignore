@@ -1,0 +1,16 @@
+# Environment
+.env
+.venv/
+.hf_cache/
+__pycache__/
+*.pyc
+
+# Generated artifacts
+dataset/processed_dataset/
+tokenizer/custom_tokenizer/
+tokenizer/tokenizer_metrics.json
+qlora/fine_tuned_model/
+qlora/metrics.json
+benchmark/benchmark_results.json
+benchmark/latency_plots/
+benchmark/comparison_tables/

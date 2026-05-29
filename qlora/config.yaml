@@ -1,0 +1,27 @@
+# QLoRA fine-tuning configuration for token classification (PII detection).
+base_model: "nvidia/Nemotron-Mini-4B-Instruct"
+processed_dataset: "dataset/processed_dataset"
+label_map: "dataset/processed_dataset/label_map.json"
+
+# 4-bit quantization (bitsandbytes).
+load_in_4bit: true
+bnb_4bit_quant_type: "nf4"
+bnb_4bit_compute_dtype: "bfloat16"
+bnb_4bit_use_double_quant: true
+
+# LoRA adapters.
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_modules: ["q_proj", "v_proj"]
+
+# Training.
+output_dir: "qlora/fine_tuned_model"
+metrics_file: "qlora/metrics.json"
+epochs: 3
+batch_size: 8
+learning_rate: 0.0002
+weight_decay: 0.01
+max_length: 256
+bf16: true   # mixed precision
+seed: 42
