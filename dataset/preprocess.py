@@ -60,8 +60,41 @@ def _find_label(sp: dict):
     )
 
 
-def normalize_span(sp: dict) -> dict:
+def _coerce_span(sp):
+    """Parse a span that may arrive as a JSON string into a dict.
+
+    Some datasets store each span as a serialized JSON object (or the whole
+    span list as a JSON string), so we decode strings before processing.
+    """
+    if isinstance(sp, str):
+        try:
+            sp = json.loads(sp)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Span is a string but not valid JSON: {sp!r}"
+            ) from exc
+    if not isinstance(sp, dict):
+        raise TypeError(
+            f"Expected a span dict, got {type(sp).__name__}: {sp!r}"
+        )
+    return sp
+
+
+def _coerce_spans(spans):
+    """Return a per-row span list, decoding it from JSON if stored as a string."""
+    if isinstance(spans, str):
+        try:
+            spans = json.loads(spans)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Spans value is a string but not valid JSON: {spans!r}"
+            ) from exc
+    return spans
+
+
+def normalize_span(sp) -> dict:
     """Coerce a raw span dict into a uniform {label, start, end} shape."""
+    sp = _coerce_span(sp)
     return {
         "label": _find_label(sp),
         "start": int(_pick(sp, START_KEYS, "start")),
@@ -121,7 +154,7 @@ def build_label_list(ds, spans_column: str) -> list[str]:
     types: set[str] = set()
     for split in ds.values():
         for spans in split[spans_column]:
-            for sp in spans:
+            for sp in _coerce_spans(spans):
                 types.add(normalize_span(sp)["label"])
     labels = ["O"]
     for t in sorted(types):
@@ -131,7 +164,7 @@ def build_label_list(ds, spans_column: str) -> list[str]:
 
 def char_to_bio(spans: list[dict], offsets, label2id: dict) -> list[int]:
     """Assign a BIO id to each token given its (start, end) char offsets."""
-    spans = [normalize_span(sp) for sp in spans]
+    spans = [normalize_span(sp) for sp in _coerce_spans(spans)]
     labels = []
     for start, end in offsets:
         if start == end:  # special token
