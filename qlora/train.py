@@ -33,6 +33,10 @@ def build_model(cfg: dict, num_labels: int):
         bnb_4bit_quant_type=cfg["bnb_4bit_quant_type"],
         bnb_4bit_compute_dtype=getattr(torch, cfg["bnb_4bit_compute_dtype"]),
         bnb_4bit_use_double_quant=cfg["bnb_4bit_use_double_quant"],
+        # score is randomly initialized (not in the pretrained checkpoint) so
+        # it must stay in full precision; quantizing a freshly init'd layer
+        # leaves its bnb quant state uninitialized and crashes at forward time.
+        llm_int8_skip_modules=["score"],
     )
     model = AutoModelForTokenClassification.from_pretrained(
         cfg["base_model"], num_labels=num_labels, quantization_config=bnb
