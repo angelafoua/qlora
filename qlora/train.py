@@ -27,20 +27,38 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
+def _ensure_fp32_head(model: torch.nn.Module) -> None:
+    """Replace a quantized classification head with a plain float32 Linear.
+
+    llm_int8_skip_modules does not reliably prevent 4-bit quantization in all
+    transformers versions.  If score ended up as LinearFP4, PEFT's deep-copy
+    into modules_to_save produces an uninitialized quant state that raises
+    AssertionError in fix_4bit_weight_quant_state_from_module at forward time.
+    """
+    try:
+        import bitsandbytes.nn as bnb_nn
+    except ImportError:
+        return
+    score = getattr(model, "score", None)
+    if score is not None and isinstance(score, bnb_nn.Linear4bit):
+        model.score = torch.nn.Linear(
+            score.in_features, score.out_features,
+            bias=score.bias is not None, dtype=torch.float32,
+        )
+
+
 def build_model(cfg: dict, num_labels: int):
     bnb = BitsAndBytesConfig(
         load_in_4bit=cfg["load_in_4bit"],
         bnb_4bit_quant_type=cfg["bnb_4bit_quant_type"],
         bnb_4bit_compute_dtype=getattr(torch, cfg["bnb_4bit_compute_dtype"]),
         bnb_4bit_use_double_quant=cfg["bnb_4bit_use_double_quant"],
-        # score is randomly initialized (not in the pretrained checkpoint) so
-        # it must stay in full precision; quantizing a freshly init'd layer
-        # leaves its bnb quant state uninitialized and crashes at forward time.
         llm_int8_skip_modules=["score"],
     )
     model = AutoModelForTokenClassification.from_pretrained(
         cfg["base_model"], num_labels=num_labels, quantization_config=bnb
     )
+    _ensure_fp32_head(model)
     model = prepare_model_for_kbit_training(model)
     lora = LoraConfig(
         r=cfg["lora_r"],
