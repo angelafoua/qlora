@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 
 import numpy as np
 import torch
@@ -81,8 +82,10 @@ def main() -> None:
     print(classification_report(true_tags, pred_tags))
     print(json.dumps(metrics, indent=2))
 
-    with open(cfg["metrics_file"]) as f:
-        existing = json.load(f) if cfg["metrics_file"] else []
+    existing = []
+    if os.path.isfile(cfg["metrics_file"]):
+        with open(cfg["metrics_file"]) as f:
+            existing = json.load(f)
     with open(cfg["metrics_file"], "w") as f:
         json.dump({"test": metrics, "train_log": existing}, f, indent=2)
 
