@@ -29,9 +29,7 @@ def load_config(path: str) -> dict:
 
 def load_model(cfg: dict, num_labels: int):
     bnb = BitsAndBytesConfig(
-        load_in_4bit=cfg["load_in_4bit"],
-        bnb_4bit_quant_type=cfg["bnb_4bit_quant_type"],
-        bnb_4bit_compute_dtype=getattr(torch, cfg["bnb_4bit_compute_dtype"]),
+        load_in_8bit=cfg["load_in_8bit"],
         llm_int8_skip_modules=["score"],
     )
     base = AutoModelForTokenClassification.from_pretrained(

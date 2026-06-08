@@ -1,6 +1,6 @@
 """Lightweight QLoRA fine-tuning for token-level PII detection.
 
-Loads the base model in 4-bit, attaches LoRA adapters, and runs a minimal
+Loads the base model in 8-bit, attaches LoRA adapters, and runs a minimal
 Trainer loop. Only the adapter weights are saved.
 """
 from __future__ import annotations
@@ -30,17 +30,19 @@ def load_config(path: str) -> dict:
 def _ensure_fp32_head(model: torch.nn.Module) -> None:
     """Replace a quantized classification head with a plain float32 Linear.
 
-    llm_int8_skip_modules does not reliably prevent 4-bit quantization in all
-    transformers versions.  If score ended up as LinearFP4, PEFT's deep-copy
-    into modules_to_save produces an uninitialized quant state that raises
-    AssertionError in fix_4bit_weight_quant_state_from_module at forward time.
+    Ensures the score head is a standard fp32 Linear so PEFT's modules_to_save
+    deep-copy does not hit an int8/4-bit quant-state edge case at forward time.
     """
     try:
         import bitsandbytes.nn as bnb_nn
     except ImportError:
         return
     score = getattr(model, "score", None)
-    if score is not None and isinstance(score, bnb_nn.Linear4bit):
+    quantized_types = tuple(
+        t for t in (getattr(bnb_nn, "Linear4bit", None), getattr(bnb_nn, "Linear8bitLt", None))
+        if t is not None
+    )
+    if score is not None and quantized_types and isinstance(score, quantized_types):
         model.score = torch.nn.Linear(
             score.in_features, score.out_features,
             bias=score.bias is not None, dtype=torch.float32,
@@ -49,10 +51,7 @@ def _ensure_fp32_head(model: torch.nn.Module) -> None:
 
 def build_model(cfg: dict, num_labels: int):
     bnb = BitsAndBytesConfig(
-        load_in_4bit=cfg["load_in_4bit"],
-        bnb_4bit_quant_type=cfg["bnb_4bit_quant_type"],
-        bnb_4bit_compute_dtype=getattr(torch, cfg["bnb_4bit_compute_dtype"]),
-        bnb_4bit_use_double_quant=cfg["bnb_4bit_use_double_quant"],
+        load_in_8bit=cfg["load_in_8bit"],
         llm_int8_skip_modules=["score"],
     )
     model = AutoModelForTokenClassification.from_pretrained(
