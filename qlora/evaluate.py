@@ -32,6 +32,7 @@ def load_model(cfg: dict, num_labels: int):
         load_in_4bit=cfg["load_in_4bit"],
         bnb_4bit_quant_type=cfg["bnb_4bit_quant_type"],
         bnb_4bit_compute_dtype=getattr(torch, cfg["bnb_4bit_compute_dtype"]),
+        llm_int8_skip_modules=["score"],
     )
     base = AutoModelForTokenClassification.from_pretrained(
         cfg["base_model"], num_labels=num_labels, quantization_config=bnb
@@ -50,7 +51,12 @@ def main() -> None:
     id2label = {i: l for i, l in enumerate(labels)}
 
     ds = load_from_disk(cfg["processed_dataset"])["test"]
-    tok = AutoTokenizer.from_pretrained(cfg["output_dir"])
+    # The tokenizer is unchanged by LoRA training; prefer base_model so
+    # evaluate works even when output_dir only contains adapter weights.
+    tok_source = cfg["output_dir"] if os.path.isfile(
+        os.path.join(cfg["output_dir"], "tokenizer_config.json")
+    ) else cfg["base_model"]
+    tok = AutoTokenizer.from_pretrained(tok_source)
     model = load_model(cfg, num_labels=len(labels))
 
     loader = DataLoader(
