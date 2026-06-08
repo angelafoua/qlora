@@ -6,6 +6,7 @@ character spans of the privacy mask, yielding standard B-/I-/O tags.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 from pathlib import Path
 
@@ -67,12 +68,7 @@ def _coerce_span(sp):
     span list as a JSON string), so we decode strings before processing.
     """
     if isinstance(sp, str):
-        try:
-            sp = json.loads(sp)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Span is a string but not valid JSON: {sp!r}"
-            ) from exc
+        sp = _parse_serialized(sp, what="Span")
     if not isinstance(sp, dict):
         raise TypeError(
             f"Expected a span dict, got {type(sp).__name__}: {sp!r}"
@@ -83,13 +79,26 @@ def _coerce_span(sp):
 def _coerce_spans(spans):
     """Return a per-row span list, decoding it from JSON if stored as a string."""
     if isinstance(spans, str):
-        try:
-            spans = json.loads(spans)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Spans value is a string but not valid JSON: {spans!r}"
-            ) from exc
+        spans = _parse_serialized(spans, what="Spans value")
     return spans
+
+
+def _parse_serialized(value: str, what: str):
+    """Decode a serialized span/list, accepting JSON or Python-literal form.
+
+    Some sources (e.g. CSV exports) store the field via ``str(obj)``, producing
+    Python-literal syntax with single quotes that ``json.loads`` rejects.
+    """
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        pass
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError) as exc:
+        raise ValueError(
+            f"{what} is a string but not valid JSON or Python literal: {value!r}"
+        ) from exc
 
 
 def normalize_span(sp) -> dict:
