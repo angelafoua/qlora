@@ -3,11 +3,8 @@ base_model: "nvidia/Nemotron-Mini-4B-Instruct"
 processed_dataset: "dataset/processed_dataset"
 label_map: "dataset/processed_dataset/label_map.json"
 
-# 4-bit quantization (bitsandbytes).
-load_in_4bit: true
-bnb_4bit_quant_type: "nf4"
-bnb_4bit_compute_dtype: "bfloat16"
-bnb_4bit_use_double_quant: true
+# 8-bit quantization (bitsandbytes) — bypasses 4-bit routine errors.
+load_in_8bit: true
 
 # LoRA adapters.
 lora_r: 8
